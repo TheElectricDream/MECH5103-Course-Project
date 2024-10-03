@@ -135,3 +135,30 @@ def sync_write_goal_position(packet_handler, group_sync_write):
     dxl_comm_result = group_sync_write.txPacket()
     if dxl_comm_result != dxl.COMM_SUCCESS:
         print(f"SyncWrite failed: {packet_handler.getTxRxResult(dxl_comm_result)}")
+
+
+# Set the profile velocity for smooth motion
+def set_profile_velocity(dxl_id: int, profile_velocity: int, packet_handler, port_num, ADDR_PROFILE_VELOCITY: int):
+    """
+    Sets the profile velocity of a specific Dynamixel motor to control the speed of movement.
+
+    Args:
+        dxl_id (int): The ID of the Dynamixel motor.
+        profile_velocity (int): The velocity to be set for the motor (0 to 32767, where 0 disables velocity control).
+        packet_handler (PacketHandler): The PacketHandler instance used to send/receive packets.
+        port_num (PortHandler): The PortHandler instance managing the communication port.
+        ADDR_PROFILE_VELOCITY (int): The address in the control table for setting the profile velocity.
+
+    Returns:
+        None
+    """
+    # Write the profile velocity to the motor
+    dxl_comm_result, dxl_error = packet_handler.write4ByteTxRx(port_num, dxl_id, ADDR_PROFILE_VELOCITY, profile_velocity)
+    
+    # Check for communication errors
+    if dxl_comm_result != dxl.COMM_SUCCESS:
+        print(f"{dxl_id}: {packet_handler.getTxRxResult(dxl_comm_result)}")
+    elif dxl_error != 0:
+        print(f"{dxl_id}: {packet_handler.getRxPacketError(dxl_error)}")
+
+
