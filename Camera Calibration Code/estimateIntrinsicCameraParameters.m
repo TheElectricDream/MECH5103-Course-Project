@@ -21,7 +21,7 @@ plot(imagePoints(:,1,2), imagePoints(:,2,2), 'ro'); % Red circles at the detecte
 hold off;
 
 % Define the size of the checkerboard squares (e.g., mm per square)
-squareSize = 21;
+squareSize = 25;
 worldPoints = patternWorldPoints("checkerboard",boardSize,squareSize);
 
 % Using imagePoints (detected 2D points) and worldPoints (corresponding 3D points)
