@@ -95,7 +95,7 @@ def select_image_points(image_path1, image_path2, n_points):
 
 # Main function
 if __name__ == "__main__":
-    nPointsTotal = 3  # Set the number of points you want to select
+    nPointsTotal = 12  # Set the number of points you want to select
     (u1, v1), (u2, v2) = select_image_points('stereo_img1.jpeg', 'stereo_img2.jpeg', nPointsTotal)
     
     # Print the selected points
