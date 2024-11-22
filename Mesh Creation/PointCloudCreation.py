@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import pickle
 from sklearn.cluster import Birch
 import pyvista as pv
-from scipy.spatial.transform import Rotation   
+import open3d as o3d
+from scipy.spatial.transform import Rotation
 #%%
 df = pd.read_excel('Data Points_LOCAL_2024_10_16.xlsx',
                    sheet_name='Range Data FINAL')
@@ -348,112 +349,138 @@ ax.set_ylabel('Y Position')
 ax.set_zlabel('Z Position')
 plt.show()
 
-#%% Now we want to create a mesh from a point cloud
+#%% Automate point cloud to mesh conversion
 
-'''
-The first step is to separate each of our surfaces. This can be done 
-automatically from what we know about the surfaces. We know there's a wall at
-the back, a floor, and bunch of objects. The wall and the floor are both 
-aligned with an axis, so we can extract them that way. After that's done,
-the remaining points will be in their own groups, so we can separate them based
-on the density of the points
-'''
+# Prepare dataset for open3d by converting into an open3d point cloud
+xyz = coord_xyz.reshape(
+    [coord_xyz.shape[0]*coord_xyz.shape[1], 3]) # [n_points, 3]
 
-# We know there's a back wall far in the back
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(xyz)
 
-idx_back_wall = np.where(coord_xyz[:,:,0] > 0.8)
-idx_not_back_wall = np.where(coord_xyz[:,:,0] <= 0.8)
+# RANSAC for 3d plane segmentation
 
-back_wall = coord_xyz[idx_back_wall]
-not_back_wall = coord_xyz[idx_not_back_wall]
+pt_to_plane_dist = 0.005
+max_plane_idx = 2 # Floor and wall are the most significant planes
 
-idx_wall = np.where(not_back_wall[:,0] > 0.76)
-idx_not_wall = np.where(not_back_wall[:,0] <= 0.76)
-wall = not_back_wall[idx_wall]
-not_wall = not_back_wall[idx_not_wall]
+segment_models = {}
+segments = {}
+segments_np = {}
 
-idx_floor = np.where(abs(not_wall[:,2]) <= 0.01)
-idx_not_floor = np.where(abs(not_wall[:,2]) > 0.01)
+colours = [ [1,0,0], [0,1,0], [0,0,1],
+           [1,1,0], [1,0,1], [0,1,1],
+           [0.6, 0.6, 0.6]]
 
-floor = not_wall[idx_floor]
-not_floor = not_wall[idx_not_floor]
-
-# For the rest of the objects, we know that their points are roughly aligned 
-# with the Z-axis, so we'll get a high density when looking from the top, so
-# let's cluster these points together based on density. For this, there's no
-# need to reinvent the wheel, so let's use an existing clustering algorithm 
-# from SciKit Learn
-
-X = np.transpose(np.array([not_floor[:,0], not_floor[:,1]]))
-
-n_clusters = 4
-
-cluster_model = Birch(threshold=0.02, n_clusters=n_clusters)
-cluster_model.fit(X)
-yhat = cluster_model.predict(X)
-clusters = np.unique(yhat)
-
-cluster_labels = ["Wood Block", "Tall Box", "Tissue Box", "Outlier"]
-wood_block = not_floor[np.where(yhat == clusters[0])]
-tall_box = not_floor[np.where(yhat == clusters[1])]
-tissue_box = not_floor[np.where(yhat == clusters[2])]
-outlier = not_floor[np.where(yhat == clusters[3])]
-
-surface_labels = ["Back Wall",
-                  "Wall",
+surface_labels = ["Wall",
                   "Floor",
                   "Wood Block", 
                   "Tall Box", 
                   "Tissue Box", 
+                  "Back Wall",
                   "Outlier"]
 
-surfaces_array = [back_wall,
-            wall,
-            floor,
+#%%
+
+remaining = pcd # points remaining; not included in another plane
+
+for i in range(max_plane_idx):
+    # Segment out the largest plane in the remaining point cloud
+    segment_models[i], inliers = remaining.segment_plane(
+        distance_threshold=pt_to_plane_dist,
+        ransac_n=3,
+        num_iterations=10000)
+    # Save the segment and colour them
+    segments[i] = remaining.select_by_index(inliers)
+    segments[i].paint_uniform_color(colours[i])
+    # Remove the points were selected
+    remaining = remaining.select_by_index(inliers, invert=True)
+    segments_np[surface_labels[i]] = (np.asarray(segments[i].points))
+
+# Paint remaining points grey so we can see them
+remaining.paint_uniform_color([0.6, 0.6, 0.6])
+
+# Visualize the segments
+o3d.visualization.draw_geometries([segments[i] for i in range(max_plane_idx)] + [remaining]) # 
+
+#%%
+o3d.visualization.draw_geometries([remaining])
+
+#%% Save the point clouds
+
+o3d.io.write_point_cloud("point_cloud_wall.ply", segments[0])
+o3d.io.write_point_cloud("point_cloud_floor.ply", segments[1])
+o3d.io.write_point_cloud("point_cloud_remaining.ply", remaining)
+
+#%% Read the point clouds
+
+segments[0] = o3d.io.read_point_cloud("point_cloud_wall.ply")
+segments[1] = o3d.io.read_point_cloud("point_cloud_floor.ply")
+remaining = o3d.io.read_point_cloud("point_cloud_remaining.ply")
+
+#%% Now cluster the remaining 4 surfaces +  1 outlier
+
+n_clusters = 5
+
+remaining_np = np.asarray(remaining.points)
+
+# Cluster only along x-y axes since the objects are aligned with the z-axis
+remaining_np_xy = remaining_np[:,0:2]
+
+cluster_model = Birch(threshold=0.001, n_clusters=n_clusters)
+cluster_model.fit(remaining_np_xy)
+yhat = cluster_model.predict(remaining_np_xy)
+clusters = np.unique(yhat)
+
+wood_block = remaining_np[np.where(yhat == clusters[0])]
+tall_box = remaining_np[np.where(yhat == clusters[1])]
+tissue_box = remaining_np[np.where(yhat == clusters[2])]
+back_wall = remaining_np[np.where(yhat == clusters[3])]
+outlier = remaining_np[np.where(yhat == clusters[4])]
+
+surfaces_array = [1,
+            1,
             wood_block, 
             tall_box, 
             tissue_box,
+            back_wall,
             outlier]
 
-surfaces = {}
+for i in range(len(surface_labels)-2):
+    segments_np[surface_labels[i+2]] = surfaces_array[i+2]
+    pcd_1 = o3d.geometry.PointCloud()
+    pcd_1.points = o3d.utility.Vector3dVector(surfaces_array[i+2])
+    segments[i+2] = pcd_1
+    segments[i+2].paint_uniform_color(colours[i+2])
 
-for i in range(len(surface_labels)):
-    surfaces[surface_labels[i]] = surfaces_array[i]
-
-# Save point cloud to a Pickle
-
-with open('point_cloud_surfaces_lidar.pkl', 'wb') as handle:
-    pickle.dump(surfaces, handle, protocol=pickle.HIGHEST_PROTOCOL)
+o3d.visualization.draw_geometries([segments[i] for i in range(len(segments))] ) # + [remaining]
 
 # Let's try to make a mesh now using PyVista
 
 def convert_points_to_mesh(points):
-
     cloud = pv.PolyData(points)
-    # cloud.plot()
-    
-    # volume = cloud.delaunay_3d(alpha=10)
     volume = cloud.delaunay_2d(alpha=0.05)
     surface = volume.extract_geometry()
     return surface
 
 back_wall_mesh = convert_points_to_mesh(back_wall)
-wall_mesh = convert_points_to_mesh(wall)
-floor_mesh = convert_points_to_mesh(floor)
+wall_mesh = convert_points_to_mesh(segments_np['Wall'])
+floor_mesh = convert_points_to_mesh(segments_np['Floor'])
 wood_block_mesh = convert_points_to_mesh(wood_block)
 tall_box_mesh = convert_points_to_mesh(tall_box)
 tissue_box_mesh = convert_points_to_mesh(tissue_box)
 
-# plotter = pv.Plotter()
-# plotter.add_mesh(back_wall_mesh, show_edges=True)
-# plotter.add_mesh(wall_mesh, show_edges=True)
-# plotter.add_mesh(floor_mesh, show_edges=True)
-# plotter.add_mesh(wood_block_mesh, show_edges=True)
-# plotter.add_mesh(tall_box_mesh, show_edges=True)
-# plotter.add_mesh(tissue_box_mesh, show_edges=True)
+# 3D Visualization
 
-# plotter.show()
-# plotter.export_obj('Scene_V1.obj')
+plotter = pv.Plotter()
+plotter.add_mesh(back_wall_mesh, show_edges=True)
+plotter.add_mesh(wall_mesh, show_edges=True)
+plotter.add_mesh(floor_mesh, show_edges=True)
+plotter.add_mesh(wood_block_mesh, show_edges=True)
+plotter.add_mesh(tall_box_mesh, show_edges=True)
+plotter.add_mesh(tissue_box_mesh, show_edges=True)
+
+plotter.show()
+
 
 #%% Now get the point cloud from Alex
 
@@ -462,14 +489,14 @@ with open('point_clouds_rev7.pkl', 'rb') as f:
 
 r1 = Rotation.from_matrix(stereo_data_1['R1'])
 r2 = Rotation.from_matrix(stereo_data_1['R2'])
+
+# Convert to Euler angles to be inputted into Blender
 angles1 = r1.as_euler('xyz', degrees=True)
 angles2 = r2.as_euler('xyz', degrees=True)
+
+# Get positions for Blender
 t1 = stereo_data_1['t1']
 t2 = stereo_data_1['t2']
-# angles1 = r1.as_quat()
-# angles2 = r2.as_quat()
-
-
 
 #%%
 
@@ -478,9 +505,9 @@ ax = fig.add_subplot(projection='3d')
 ax.set_box_aspect([1,1,1]) 
 # ax.scatter(0,0,0, label='Corner of Table', s=100)
 # ax.scatter(0.1539875, 0.6683375, 0.1095375, label="Lidar Source", s=100)
-ax.scatter(floor[:,0], floor[:,1], floor[:,2], label='Floor')
+ax.scatter(np.asarray(segments[0].points)[:,0], np.asarray(segments[0].points)[:,1], np.asarray(segments[0].points)[:,2], label='Wall')
 ax.scatter(back_wall[:,0], back_wall[:,1], back_wall[:,2], label='Far Wall')
-ax.scatter(wall[:,0], wall[:,1], wall[:,2], label='Wall')
+ax.scatter(np.asarray(segments[1].points)[:,0], np.asarray(segments[1].points)[:,1], np.asarray(segments[1].points)[:,2], label='Floor')
 ax.scatter(wood_block[:,0], wood_block[:,1], wood_block[:,2], label='Wood Block')
 ax.scatter(tall_box[:,0], tall_box[:,1], tall_box[:,2], label='Tall Box')
 ax.scatter(tissue_box[:,0], tissue_box[:,1], tissue_box[:,2], label='Tissue Box')
@@ -490,9 +517,3 @@ ax.set_xlabel('X Position')
 ax.set_ylabel('Y Position')
 ax.set_zlabel('Z Position')
 plt.show()
-
-# plt.figure()
-# plt.scatter(floor[:,1], floor[:,2])
-# plt.xlabel("Y Position (m)")
-# plt.ylabel("Z Position (m)")
-# plt.show()
