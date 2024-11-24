@@ -1,11 +1,16 @@
 import numpy as np
 import pickle
-import plotly.graph_objects as go
 import cv2
 from scipy.optimize import least_squares
 from scipy.optimize import minimize
 from scipy.optimize import fmin_bfgs
 from scipy.linalg import rq
+import plotly.io as pio
+import os
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+
 
 # Disable scientific notation and set precision
 np.set_printoptions(suppress=True,  # Suppress scientific notation
@@ -127,21 +132,23 @@ def return_intrinsic_properties_n_points(P, U, V):
     t : ndarray
         The translation vector.
     """
-    num_points = len(P)
+    num_points = len(P)    
+    P_h = np.hstack((P, np.ones((len(P), 1))))
+
 
     # Construct the A matrix for the system of equations
     A = []
     for i in range(num_points):
-        X, Y, Z = P[i]
+        X, Y, Z, W = P_h[i]
         u, v = U[i], V[i]
-        A.append([X, Y, Z, 1, 0, 0, 0, 0, -u*X, -u*Y, -u*Z, -u])
-        A.append([0, 0, 0, 0, X, Y, Z, 1, -v*X, -v*Y, -v*Z, -v])
+        A.append([X, Y, Z, 1, 0, 0, 0, 0, -u*X, -u*Y, -u*Z, -u*W])
+        A.append([0, 0, 0, 0, X, Y, Z, 1, -v*X, -v*Y, -v*Z, -v*W])
     A = np.array(A)
 
     # Solve for M using SVD
     _, _, Vh = np.linalg.svd(A)
 
-  # Need to transpose Vh to get V (Numpy specific)
+    # Need to transpose Vh to get V (Numpy specific)
     SVD_V = np.transpose(Vh)
 
     # Assemble the transformation matrix
@@ -165,68 +172,23 @@ def return_intrinsic_properties_n_points(P, U, V):
 if __name__ == "__main__":
 
     # Hard code the points extracted using the selectPointsForPPM.py script
+    # These points are for revFinal
+    U1 = np.array([994.04, 1130.81, 1323.45, 1527.57, 1643.08, 1984.40, 1706.82, 1691.76, 2201.92, 2348.01])
+    V1 = np.array([639.72, 1722.25, 1589.26, 1387.17, 997.37, 1129.09, 1365.43, 1092.20, 1218.78, 1168.31])
+    U2 = np.array([1030.41, 1149.69, 1398.14, 1734.31, 1966.41, 2217.97,1905.45, 1904.88, 2331.52, 2538.64])
+    V2 = np.array([540.94, 1548.72, 1473.72, 1337.16, 989.52, 1169.19,1350.05, 1078.66, 1293.54, 1273.36])
 
-    # These ponts are for rev1, which was the tissue box
-    # U1 = np.array([1705.84, 1693.90, 1643.19, 1469.28, 1504.77, 1528.02])
-    # V1 = np.array([1366.94, 1091.92, 997.93, 1013.47, 1104.05, 1387.08])
-    # U2 = np.array([1906.03, 1905.87, 1966.18, 1799.79, 1729.24, 1734.55])
-    # V2 = np.array([1351.90, 1077.88, 989.02, 975.90, 1061.55, 1337.05])
-
-    # # These points are for rev2, which was the wooden block
-    # U11 = np.array([1976.92,2187.64,2338.49,2348.13,2132.12,1985.96])
-    # V11 = np.array([1324.48,1424.20,1361.11,1169.20,1078.72,1127.85])
-    # U21 = np.array([2200.42,2308.06,2522.20,2538.69,2413.71,2219.78])
-    # V21 = np.array([1366.44,1503.29,1476.75,1271.74,1145.84,1167.13])
-
-    # U12 = np.array([1976.80,2187.08,2340.91,2349.40,2131.14,1984.80])
-    # V12 = np.array([1322.41,1423.80,1361.86,1168.57,1077.67,1127.62])
-    # U22 = np.array([2201.04,2307.45,2522.91,2540.38,2413.33,2217.98])
-    # V22 = np.array([1364.96,1502.60,1479.83,1275.49,1144.73,1168.55])
-
-    # U13 = np.array([1977.84, 2187.13, 2339.50, 2348.01, 2131.56, 1985.91])
-    # V13 = np.array([1322.87, 1421.91, 1362.31, 1170.05, 1077.74, 1127.93])
-    # U23 = np.array([2199.22, 2307.44, 2523.89, 2539.15, 2411.50, 2218.19])
-    # V23 = np.array([1362.58, 1503.18, 1478.66, 1272.40, 1145.22, 1167.88])
-
-    # # Take the average of the points
-    # U1 = (U11 + U12 + U13) / 3
-    # V1 = (V11 + V12 + V13) / 3
-    # U2 = (U21 + U22 + U23) / 3
-    # V2 = (V21 + V22 + V23) / 3
-
-    # These points are for revFinal, which is a mix of points measured in blender
-    U1 = np.array([994.04, 1130.81, 1323.45, 1527.57, 1643.08, 1984.40, 1706.82, 1691.76])
-    V1 = np.array([639.72, 1722.25, 1589.26, 1387.17, 997.37, 1129.09, 1365.43,1092.20])
-    U2 = np.array([1030.41, 1149.69, 1398.14, 1734.31, 1966.41, 2217.97,1905.45,1904.88])
-    V2 = np.array([540.94, 1548.72, 1473.72, 1337.16, 989.52, 1169.19,1350.05,1078.66])
-
-    # Hard code the location of points in 3D space
-
-    # These points are for rev1, which was the tissue box
-    # P1 = np.array([0, 0, 0])
-    # P2 = np.array([0, 0, 0.120])
-    # P3 = np.array([0.120, 0, 0.120])
-    # P4 = np.array([0.120, 0.073, 0.120])
-    # P5 = np.array([0, 0.073, 0.120])
-    # P6 = np.array([0, 0.073, 0])
-
-    # These points are for rev2, which was the wooden block
-    # P1 = np.array([0, 0, 0])
-    # P2 = np.array([0.128, 0, 0])
-    # P3 = np.array([0.128, 0.087, 0])
-    # P4 = np.array([0.128, 0.087, 0.087])
-    # P5 = np.array([0, 0.087, 0.087])
-    # P6 = np.array([0, 0, 0.087])
-
-    # These points are for revFinal, which is a mix of points measured in blender
+    # These points are for revFinal
     P1 = np.array([0.42409, 0.88457, 0.37098])
     P2 = np.array([0.42409, 0.88457, 0])
     P3 = np.array([0.49632, 0.82061, 0])
     P4 = np.array([0.63478, 0.73245, 0])
     P5 = np.array([0.75478, 0.65945, 0.120])
-    P6 = np.array([0.65714, 0.53881, 0.087])
+    P6 = np.array([0.65714, 0.53881, 0.093137])
     P7 = np.array([0.63478, 0.65945, 0])
     P8 = np.array([0.63478, 0.65945, 0.120])
+    P9 = np.array([0.541128, 0.484716, 0.095137])
+    P10 = np.array([0.577896, 0.405867, 0.095137])
 
     # From the checkerboard calibration we got the following intrinsic parameters
     K_Checkerboard = np.array([[3190.76177614524,	0,	                2014.68354646223],
@@ -268,20 +230,11 @@ if __name__ == "__main__":
                             [775.47, 417.22], [1030.44, 538.20], [1147.51, 1546.38], [1319.23, 503.08],
                             [1031.74, 539.50], [1401.19, 1474.83]])
 
-    # These points are special cases for additional validation
-    # UV1_LIDAR = np.array([[1968.05, 1559.88]])
-    # UV2_LIDAR = np.array([[1458.19, 1525.89]])
-    # UV1_WALL = np.array([[2605.04, 694.93], [2367.25, 1126.04]])
-    # UV2_WALL = np.array([[3245.15, 833.20], [2745.68, 1246.69]])
-
     # Triangulate 3D points from 2D correspondences
     P_WOOD    = triangulate_points(M1, M2, UV1_WOOD, UV2_WOOD)
     P_TISSUE  = triangulate_points(M1, M2, UV1_TISSUE, UV2_TISSUE)
     P_BOX     = triangulate_points(M1, M2, UV1_BOX, UV2_BOX)
-    P_CAL     = np.array([P1, P2, P3, P4, P5, P6, P7, P8])
-
-    # P_WALL  = triangulate_points(M1, M2, UV1_WALL, UV2_WALL)
-    # P_LIDAR = triangulate_points(M1, M2, UV1_LIDAR, UV2_LIDAR)
+    P_CAL     = np.array([P1, P2, P3, P4, P5, P6, P7, P8, P9, P10])
 
     # The world origin is located at:
     WORLD_ORIGIN  = np.array([0, 0, 0])
@@ -292,15 +245,11 @@ if __name__ == "__main__":
                                [np.sin(np.radians(ROTATION)),  np.cos(np.radians(ROTATION)), 0],
                                [0,                             0,                            1]])
     
-
     # Rotate the points to align with the world coordinate system
     P_WOOD   = P_WOOD @ R_PPM_TO_WORLD.T  
     P_TISSUE = P_TISSUE @ R_PPM_TO_WORLD.T
     P_BOX    = P_BOX @ R_PPM_TO_WORLD.T
     P_CAL    = P_CAL  @ R_PPM_TO_WORLD.T
-
-    # P_WALL = P_WALL @ R_PPM_TO_WORLD.T
-    # P_LIDAR = P_LIDAR @ R_PPM_TO_WORLD.T
 
     # Translate the points to the world origin
     P_WOOD   = P_WOOD   + WORLD_ORIGIN
@@ -328,58 +277,106 @@ if __name__ == "__main__":
     with open('point_clouds.pkl', 'wb') as f:
         pickle.dump({'P_CAL': P_CAL, 'P_WOOD': P_WOOD, 'P_TISSUE': P_TISSUE, 'P_BOX': P_BOX, 't1': t1, 't2': t2, 'R1':R1, 'R2': R2}, f)
 
-    # Initialize Plotly figure
-    fig = go.Figure()
+    plt.rcParams.update({'font.size': 14})  # Set font size globally
+
+    # Initialize figure
+    fig = plt.figure(figsize=(16, 12))
+    ax = fig.add_subplot(111, projection='3d')
     scale = 0.1
 
+    # Plot triangulated points (Wood)
     x, y, z = zip(*P_WOOD)
-    fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='markers+lines', marker=dict(size=5, color='green'), name="Points (WOOD)"))
+    ax.plot(x, y, z, color='green', linewidth=1)  # Connect dots with lines
+    ax.scatter(x, y, z, c='green', label="Tri. Pts. (Wood)")
 
+    # Plot triangulated points (Tissue)
     x, y, z = zip(*P_TISSUE)
-    fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='markers+lines', marker=dict(size=5, color='blue'), name="Points (TISSUE)"))
+    ax.plot(x, y, z, color='blue', linewidth=1)  # Connect dots with lines
+    ax.scatter(x, y, z, c='blue', label="Tri. Pts. (Tissue)")
 
+    # Plot triangulated points (Box)
     x, y, z = zip(*P_BOX)
-    fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='markers+lines', marker=dict(size=5, color='orange'), name="Points (BOX)"))
+    ax.plot(x, y, z, color='orange', linewidth=1)  # Connect dots with lines
+    ax.scatter(x, y, z, c='orange', label="Tri. Pts. (Box)")
 
+    # Plot calibration points
     x, y, z = zip(*P_CAL)
-    fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(size=5, color='red'), line=dict(color='red'), name="Points (CAL)"))
+    ax.scatter(
+        x, y, z,
+        c='red', alpha=0.5,  # Set transparency with alpha
+        s=100, edgecolors='black', label="Cal. Pts."
+    )
+    # Plot world origin
+    ax.scatter(0, 0, 0, c='blue', marker='x', s=50, label="Origin")
 
-    # x, y, z = zip(*P_WALL)
-    # fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(size=5, color='blue'), name="Points (WALLS)"))
-
-    fig.add_trace(go.Scatter3d(x=[0], y=[0], z=[0], mode='markers', marker=dict(size=5, color='blue', symbol='x'), name="ORIGIN"))
-
-    # Plot cameras' positions
-    fig.add_trace(go.Scatter3d(x=[t1[0]], y=[t1[1]], z=[t1[2]], mode='markers', marker=dict(size=8, color='blue'), name="Camera 1"))
-    fig.add_trace(go.Scatter3d(x=[t2[0]], y=[t2[1]], z=[t2[2]], mode='markers', marker=dict(size=8, color='green'), name="Camera 2"))
+    # Plot camera positions
+    ax.scatter(t1[0], t1[1], t1[2], c='magenta', s=80, label="Cam. #1")
+    ax.scatter(t2[0], t2[1], t2[2], c='yellow', s=80, label="Cam. #2")
 
     # Plot Camera 1 axes
     for i, color in enumerate(['red', 'green', 'blue']):
-        fig.add_trace(go.Scatter3d(
-            x=[t1[0], t1[0] + scale * R1[0, i]], 
-            y=[t1[1], t1[1] + scale * R1[1, i]], 
-            z=[t1[2], t1[2] + scale * R1[2, i]], 
-            mode='lines', line=dict(color=color), name=f"Camera 1 {['X', 'Y', 'Z'][i]}-axis"
-        ))
+        ax.plot(
+            [t1[0], t1[0] + scale * R1[0, i]],
+            [t1[1], t1[1] + scale * R1[1, i]],
+            [t1[2], t1[2] + scale * R1[2, i]],
+            color=color,
+            linewidth=2,
+            label=f"Camera 1 {['X', 'Y', 'Z'][i]}-axis"
+        )
 
     # Plot Camera 2 axes
     for i, color in enumerate(['red', 'green', 'blue']):
-        fig.add_trace(go.Scatter3d(
-            x=[t2[0], t2[0] + scale * R2[0, i]], 
-            y=[t2[1], t2[1] + scale * R2[1, i]], 
-            z=[t2[2], t2[2] + scale * R2[2, i]], 
-            mode='lines', line=dict(color=color, dash='dash'), name=f"Camera 2 {['X', 'Y', 'Z'][i]}-axis"
-        ))
+        ax.plot(
+            [t2[0], t2[0] + scale * R2[0, i]],
+            [t2[1], t2[1] + scale * R2[1, i]],
+            [t2[2], t2[2] + scale * R2[2, i]],
+            color=color,
+            linewidth=2
+        )
 
     # Configure axes and layout
-    fig.update_layout(
-        scene=dict(
-            xaxis_title='X',
-            yaxis_title='Y',
-            zaxis_title='Z'
-        ),
-        title="3D Points and Camera Orientation"
-    )
+    ax.set_xlabel('X', labelpad=10)
+    ax.set_ylabel('Y', labelpad=10)
+    ax.set_zlabel('Z', labelpad=10)
+    #ax.set_title("3D Points and Camera Orientation")
+    ax.legend(loc='upper left', bbox_to_anchor=(0.8, 0.9), borderaxespad=0)
+
+
+    def set_axes_equal(ax):
+        """Make axes of 3D plot have equal scale."""
+        x_limits = ax.get_xlim3d()
+        y_limits = ax.get_ylim3d()
+        z_limits = ax.get_zlim3d()
+
+        x_range = x_limits[1] - x_limits[0]
+        y_range = y_limits[1] - y_limits[0]
+        z_range = z_limits[1] - z_limits[0]
+
+        max_range = max(x_range, y_range, z_range)
+
+        x_middle = sum(x_limits) / 2
+        y_middle = sum(y_limits) / 2
+        z_middle = sum(z_limits) / 2
+
+        ax.set_xlim3d([x_middle - max_range / 2, x_middle + max_range / 2])
+        ax.set_ylim3d([y_middle - max_range / 2, y_middle + max_range / 2])
+        ax.set_zlim3d([z_middle - max_range / 2, z_middle + max_range / 2])
+
+    # Add this after plotting your data
+    set_axes_equal(ax)
+
+    # Define the range of the plane
+    x = np.linspace(0, 0.81, 10)  # From 0 to 2 in the x-direction
+    y = np.linspace(0, 1.3, 10)  # From 0 to 1 in the y-direction
+    x, y = np.meshgrid(x, y)   # Create a grid for the plane
+    z = np.zeros_like(x)       # Flat plane in the z-direction
+    ax.plot_surface(x, y, z, alpha=0.2, color='gray')
+
+    ax.view_init(elev=30, azim=210)
+
+    # Save the plot as an image
+    plt.savefig('3D_Points_and_Camera_Orientation.svg', dpi=300, bbox_inches='tight')
+
 
     # Show the plot
-    fig.show()
+    #plt.show()

@@ -1,0 +1,37 @@
+def triangulate_points(M1, M2, point1s, point2s):
+    """
+    Triangulate 3D points from corresponding 2D points in stereo images.
+    Parameters:
+    M1 (numpy.ndarray): The 3x4 projection matrix for the first camera.
+    M2 (numpy.ndarray): The 3x4 projection matrix for the second camera.
+    point1s (numpy.ndarray): An Nx2 array of 2D points from the first image.
+    point2s (numpy.ndarray): An Nx2 array of 2D points from the second image.
+    Returns:
+    numpy.ndarray: An Nx3 array of triangulated 3D points.
+    """
+
+    world_points = np.array([])
+    for i in range(point1s.shape[0]):
+
+        point1 = point1s[i]
+        point2 = point2s[i]
+
+        # Construct matrix A from the projection equations
+        A = np.array([
+            (point1[0] * M1[2, :] - M1[0, :]),
+            (point1[1] * M1[2, :] - M1[1, :]),
+            (point2[0] * M2[2, :] - M2[0, :]),
+            (point2[1] * M2[2, :] - M2[1, :])
+        ])
+        
+        # Solve for the 3D point using SVD
+        _, _, Vt = np.linalg.svd(A)
+        X = Vt[-1]  # Solution is the last row of Vt
+        X = X / X[3]  # Convert to non-homogeneous coordinates (normalize by the last coordinate)
+        if world_points.size == 0:
+            world_points = X[:3].reshape(1, 3)
+        else:
+            world_points = np.vstack((world_points, X[:3].reshape(1, 3)))
+
+        
+    return world_points
