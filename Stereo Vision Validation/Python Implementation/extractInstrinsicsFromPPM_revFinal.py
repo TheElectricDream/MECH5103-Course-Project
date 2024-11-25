@@ -321,7 +321,7 @@ if __name__ == "__main__":
             [t1[2], t1[2] + scale * R1[2, i]],
             color=color,
             linewidth=2,
-            label=f"Camera 1 {['X', 'Y', 'Z'][i]}-axis"
+            label=f"Camera {['X', 'Y', 'Z'][i]}-axis"
         )
 
     # Plot Camera 2 axes
@@ -335,11 +335,11 @@ if __name__ == "__main__":
         )
 
     # Configure axes and layout
-    ax.set_xlabel('X', labelpad=10)
-    ax.set_ylabel('Y', labelpad=10)
-    ax.set_zlabel('Z', labelpad=10)
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)', rotation=156)
     #ax.set_title("3D Points and Camera Orientation")
-    ax.legend(loc='upper left', bbox_to_anchor=(0.8, 0.9), borderaxespad=0)
+    ax.legend(loc='upper left', bbox_to_anchor=(0.7, 0.9), borderaxespad=0)
 
 
     def set_axes_equal(ax):
