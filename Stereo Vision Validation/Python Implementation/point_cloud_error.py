@@ -83,7 +83,7 @@ def point_to_plane_distance(point, normal, centroid):
 
 if __name__ == "__main__":
     # Load static point clouds
-    static_data = load_point_clouds('point_clouds.pkl')
+    static_data = load_point_clouds('point_clouds_10pts.pkl')
     P_CAL = static_data['P_CAL']
     P_WOOD = static_data['P_WOOD']
     P_TISSUE = static_data['P_TISSUE']
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         errors = [point_to_plane_distance(p, normal, centroid) for p in measured]
         print(f'Mean error for face: {np.mean(errors) * 1000:.2f} mm')
 
-    ax.view_init(elev=30, azim=190)
+    ax.view_init(elev=90, azim=190)
 
     # Configure axes and layout
     ax.set_xlabel('X (m)')
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     #ax.set_title("3D Points and Camera Orientation")
     ax.legend(loc='upper left', bbox_to_anchor=(0.7, 0.9), borderaxespad=0)
 
-    plt.savefig('LiDAR_versus_Stereo.svg', dpi=300, bbox_inches='tight')
+    plt.savefig('LiDAR_versus_Stereo_TopView_10pts.svg', dpi=300, bbox_inches='tight')
 
     # Show plot
     plt.show()

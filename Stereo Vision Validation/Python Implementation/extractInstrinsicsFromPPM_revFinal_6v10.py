@@ -201,7 +201,7 @@ if __name__ == "__main__":
                          [0,	    0,	    1]])
 
     # Stack the real point locations
-    P = np.vstack((P1, P2, P3, P4, P5, P6, P7, P8, P9, P10))
+    P = np.vstack((P1, P2, P3, P4, P5, P6, P7, P8))#, P9, P10))
 
     # Run the calibration
     M1, K1, R1, t1 = return_intrinsic_properties_n_points(P, U1, V1)
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     t2 = t2 @ R_PPM_TO_WORLD.T
 
     # Save the point clouds to a pickle file
-    with open('point_clouds_10pts.pkl', 'wb') as f:
+    with open('point_clouds_8pts.pkl', 'wb') as f:
         pickle.dump({'P_CAL': P_CAL, 'P_WOOD': P_WOOD, 'P_TISSUE': P_TISSUE, 'P_BOX': P_BOX, 't1': t1, 't2': t2, 'R1':R1, 'R2': R2}, f)
 
     plt.rcParams.update({'font.size': 14})  # Set font size globally
@@ -375,7 +375,7 @@ if __name__ == "__main__":
     ax.view_init(elev=30, azim=210)
 
     # Save the plot as an image
-    plt.savefig('3D_Points_and_Camera_Orientation_10pts.svg', dpi=300, bbox_inches='tight')
+    plt.savefig('3D_Points_and_Camera_Orientation_8pts.svg', dpi=300, bbox_inches='tight')
 
 
     # Show the plot
